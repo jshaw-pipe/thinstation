@@ -10,3 +10,39 @@ if [ -d /lib/firefox/browser ]; then
 		ln -s browser/extensions /lib/firefox/extensions
 	fi
 fi
+
+if [ -d /etc/pkcs11/nss ]; then
+	for pkcs in /etc/pkcs11/nss/*.pkcs11; do
+		cat $pkcs >> /etc/TS.default/pkcs11.txt
+	done
+fi
+
+if [ ! -d /etc/pki/nssdb ]; then
+	mkdir -m 755 -p /etc/pki/nssdb
+	modutil -create -force -dbdir /etc/pki/nssdb
+	chmod 644 /etc/pki/nssdb/*
+fi
+if [ ! -e /lib/firefox/distribution ]; then
+	mkdir -p /lib/firefox/distribution
+	cat <<EOF>> /lib/firefox/distribution/policies.json
+{
+  "policies": {
+    "DisableAppUpdate": true,
+    "DisablePocket": true,
+    "DisableTelemetry": true,
+    "ExtensionUpdate": false,
+    "Preferences": {
+      "browser.search.update": false
+    }
+  }
+}
+EOF
+fi
+
+for i in /lib/firefox/*.so /lib/firefox/*.chk; do
+	file=`basename $i`
+	if [ -e /lib/$file ]; then
+		rm $i
+		ln /lib/$file $i
+	fi
+done

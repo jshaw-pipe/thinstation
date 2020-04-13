@@ -49,4 +49,6 @@ build() {
 
 	make -j1 INSTALLROOT=$PKG install efi32 PYTHON=python3 || make -j1 INSTALLROOT=$PKG install efi32 PYTHON=python3
 	make -j1 INSTALLROOT=$PKG install efi64 PYTHON=python3 || make -j1 INSTALLROOT=$PKG install efi64 PYTHON=python3
+	install $SRC/syslinux/bios/core/ldlinux.sys $PKG/usr/share/syslinux/bios/ldlinux.sys
+        install $SRC/syslinux/bios/core/ldlinux.bss $PKG/usr/share/syslinux/bios/ldlinux.bss
 }

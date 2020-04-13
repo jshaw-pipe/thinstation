@@ -103,7 +103,9 @@ drwxr-xr-x	root/root	usr/share/syslinux/bios/dosutil/
 -rw-r--r--	root/root	usr/share/syslinux/bios/isolinux.bin
 -rw-r--r--	root/root	usr/share/syslinux/bios/kbdmap.c32
 -rw-r--r--	root/root	usr/share/syslinux/bios/kontron_wdt.c32
+-rwxr-xr-x	root/root	usr/share/syslinux/bios/ldlinux.bss
 -rw-r--r--	root/root	usr/share/syslinux/bios/ldlinux.c32
+-rwxr-xr-x	root/root	usr/share/syslinux/bios/ldlinux.sys
 -rw-r--r--	root/root	usr/share/syslinux/bios/lfs.c32
 -rw-r--r--	root/root	usr/share/syslinux/bios/libcom32.c32
 -rw-r--r--	root/root	usr/share/syslinux/bios/libgpl.c32

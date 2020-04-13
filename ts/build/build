@@ -14,7 +14,7 @@ PKGDIR=boot-images/pkg-packages
 DEVDIR=./packages/base/dev
 MODDIR=boot-images/module-packages
 PACDIR=./tmp-tree/packages
-MAXIMAGE=786432
+MAXIMAGE=1786432
 TOOLSDIR=./utils/tools
 KERNEL_PARAMETERS=""
 CONFDIR=./conf
@@ -1372,7 +1372,7 @@ echo -e "Setting basepath"
 
 if [ -e $PACDIR/basename.param ]; then
   if [ -e $PACDIR/basename.param ]; then
-    echo "BASENAME=$ts_basename" >> ./tmp-tree/etc/thinstation.defaults
+    echo "BASENAME=\"$ts_basename\"" >> ./tmp-tree/etc/thinstation.defaults
   elif [ "$ts_basename" = "." ] ; then
     echo "BASENAME=" >> ./tmp-tree/etc/thinstation.defaults
   fi
@@ -1381,7 +1381,7 @@ else
 fi
 
 if [ -e $PACDIR/basepath.param ]; then
-    echo "BASEPATH=$ts_basepath" >> ./tmp-tree/etc/thinstation.defaults
+    echo "BASEPATH=\"$ts_basepath\"" >> ./tmp-tree/etc/thinstation.defaults
 else
     echo "BASEPATH=." >> ./tmp-tree/etc/thinstation.defaults
 fi
@@ -1393,7 +1393,7 @@ fi
 echo -e "Setting baseurl"
 
 if [ -e $PACDIR/baseurl.param ]; then
-    echo "BASEURL=$ts_baseurl" >> ./tmp-tree/etc/thinstation.defaults
+    echo "BASEURL=\"$ts_baseurl\"" >> ./tmp-tree/etc/thinstation.defaults
 fi
 
 echo -e "Checking for Key File"
@@ -2070,7 +2070,7 @@ image_fastboot()
 }
 
 if [ -z "$ts_bootimages" ]; then
-	ts_bootimages="syslinux refind pxe systemd-boot refind-iso systemd-boot-iso iso"
+	ts_bootimages="syslinux syslinux-sb-iso refind pxe systemd-boot refind-iso systemd-boot-iso iso"
 fi
 if [ -z "$ts_syslinuxtheme" ]; then
 	ts_syslinuxtheme="default"
@@ -2096,7 +2096,7 @@ add_image()
 			sys_copy $INITDIR/$KERN64 $ESP/boot/$KERN64
 			# Because HashTool.efi is dumb and cant deal with a folder named boot on CD.
 			# Also makes it easier for the user to enroll the kernel hash.
-#			sys_copy $INITDIR/$KERN64 $ESP/EFI/BOOT/enroll-$KERN64
+			sys_copy $INITDIR/$KERN64 $ESP/EFI/BOOT/enroll-$KERN64
 #		else
 #			sys_copy $INITDIR/vmlinuz $ESP/boot/vmlinuz
 #			sys_copy $INITDIR/vmlinuz $ESP/EFI/BOOT/enroll-vmlinuz
@@ -2104,6 +2104,7 @@ add_image()
 	else
 		for kernel in `find $INITDIR -maxdepth 1 -type f -name vmlinuz\* -printf '%f '`; do
 			sys_copy $INITDIR/$kernel $ESP/boot/$kernel
+			sys_copy $INITDIR/$kernel $ESP/EFI/BOOT/enroll-$kernel
 			if [ -e $INITDIR/lib.squash ]; then
 				sys_link hard $INITDIR/lib.squash $ESP/boot/lib.squash
 			fi
@@ -2162,7 +2163,7 @@ syslinux_copy_files_bios()
 		ts_bootserver=`ip addr show $inet_dev |grep -e "inet " |cut -d " " -f6 |cut -d "/" -f1| head -n1`
 	fi
 	biosdir=/usr/share/syslinux/bios
-	configdir=boot-images/templates/syslinux/$ts_syslinuxtheme
+	configdir=boot-images/templates/syslinux/"$ts_syslinuxtheme"
 	BIOSDIR=${ESP}/boot$BDIR
 	CONFIGDIR=`dirname $CONFIGFILE`
 
@@ -2229,6 +2230,19 @@ syslinux_copy_files_efi()
 		sys_copy ${configdir}${file} "$EFI32DIR/$file"
 		sys_copy ${configdir}${file} "$EFI64DIR/$file"
 	done
+
+	for file in `find $ESP -name \*.tpl |sed -e "s|$ESP||g"`; do
+                endfile=`dirname $file`/`basename $file .tpl`
+                cat $ESP/$file |sed -e "s/\$KERNEL_PARAMETERS/$KERNEL_PARAMETERS LM=$LM/g" > $ESP/$endfile
+                rm $ESP/$file
+                sed -i -e "s/\$LM/$LM/g" $ESP/$endfile
+                if [ "$LOADER" == "lpxelinux.0" ]; then
+                        sed -i -e "s|/boot|http://$ts_bootserver/boot|g" $ESP/$endfile
+                elif [ "$LOADER" == "pxelinux.0" ]; then
+                        sed -i -e "s|/boot|::/boot|g" $ESP/$endfile
+                fi
+                echo $ESP/$endfile >> boot-images/initrd/added.files
+        done
 	find $ESP -name syslinux.cfg.tpl -delete
 
 	if [ "$LOADER" == "lpxelinux.0" ]; then
@@ -2260,7 +2274,7 @@ syslinux_copy_files_efi()
 refind_copy_files()
 {
 	refdir=/boot/efi/EFI/refind
-	configdir=boot-images/templates/refind/$ts_refindtheme
+	configdir=boot-images/templates/refind/"$ts_refindtheme"
 	KDIR=${ESP}/boot
 	EFIDIR=$ESP/EFI/BOOT
 
@@ -2278,6 +2292,19 @@ refind_copy_files()
 			sed -i -e "s:initrd=/boot/initrd:initrd=/boot/ucode initrd=/boot/initrd:" $EFIDIR/$file
 		fi
 	done
+}
+
+rufus_copy_files()
+{
+	rufus_exe=`find /usr/share/rufus -type f 2>/dev/null`
+	if [ -n "$rufus_exe" ]; then
+		sysrelease=`hexdump -s 64 -n 8192 -C /usr/share/syslinux/bios/ldlinux.sys |grep -e SYSLINUX -A2 |cut -d '|' -f2 |sed -e ':a;N;$!ba;s/\n//g' |cut -d "-" -f2- |sed -e 's/\*//g' |sed -e 's/\.//g'`
+		sysversion=`hexdump -s 64 -n 8192 -C /usr/share/syslinux/bios/ldlinux.sys |grep -e SYSLINUX -A2 |cut -d '|' -f2 |sed -e ':a;N;$!ba;s/\n//g' |cut -d " " -f2`
+		mkdir -p $ESP/rufus/rufus_files/syslinux-$sysversion/$sysrelease
+		sys_copy /usr/share/syslinux/bios/ldlinux.sys $ESP/rufus/rufus_files/syslinux-$sysversion/$sysrelease/ldlinux.sys
+		sys_copy /usr/share/syslinux/bios/ldlinux.bss $ESP/rufus/rufus_files/syslinux-$sysversion/$sysrelease/ldlinux.bss
+		sys_copy $rufus_exe $ESP/rufus/`basename $rufus_exe`
+	fi
 }
 
 sys_link()
@@ -2334,7 +2361,7 @@ wrap_efi()
 # Skips Images if NOIMAGES is set, useful for TS-O-Matic
 if [ -z "$NOIMAGES" ]; then
 	remove_old_boot_files
-	configdir=boot-images/templates/syslinux/$ts_syslinuxtheme
+	configdir=boot-images/templates/syslinux/"$ts_syslinuxtheme"
 	# Any text file is a potential config, and there are plenty of ways to get one in there,
 	# so lets look at all of them in the config folder.
 	for file in `find $configdir -type f`;do
@@ -2360,6 +2387,68 @@ if [ -z "$NOIMAGES" ]; then
 				syslinux_copy_files_efi
 				add_image
 				add_overlay
+			;;
+			syslinux-sb-iso)
+				ESP=boot-images/syslinux-sb-iso/source
+				EFI32DIR=$ESP/EFI/BOOT
+				EFI64DIR=$ESP/EFI/BOOT
+				BDIR=/syslinux
+				CONFIGFILE=syslinux.cfg
+				LOADER=syslinux
+				LM=4
+				configdir=boot-images/templates/syslinux/default
+				syslinux_copy_files_efi
+
+				mv $ESP/EFI/BOOT/bootx64.efi $ESP/EFI/BOOT/loader.efi
+				echo $ESP/EFI/BOOT/loader.efi >> boot-images/initrd/added.files
+				sys_copy /usr/lib/prebootloader/PreLoader.efi $ESP/EFI/BOOT/bootx64.efi
+				sys_copy /usr/lib/prebootloader/HashTool.efi $ESP/EFI/BOOT/HashTool.efi
+
+				add_image efi
+				wrap_efi
+				configdir=boot-images/templates/syslinux/"$ts_syslinuxtheme"
+
+				LM=2
+				syslinux_copy_files_efi
+				mv $ESP/EFI/BOOT/bootx64.efi $ESP/EFI/BOOT/loader.efi
+				sys_copy /usr/lib/prebootloader/PreLoader.efi $ESP/EFI/BOOT/bootx64.efi
+
+				BDIR=/isolinux
+				CONFIGFILE=isolinux.cfg
+				LOADER=isolinux.bin
+				LM=4
+				syslinux_copy_files_bios
+
+				BDIR=/syslinux
+				CONFIGFILE=syslinux.cfg
+				LOADER=syslinux
+				LM=2
+				syslinux_copy_files_bios
+
+				rufus_copy_files
+				add_image
+				add_overlay
+				addpkgs $ESP
+
+				mkisofs -V "$ts_cdvolname" \
+					-o $ESP/../thinstation-efi.iso \
+					-b boot/isolinux/isolinux.bin \
+					-c boot/isolinux/boot.cat \
+					-no-emul-boot \
+					-boot-load-size 4 \
+					-boot-info-table \
+					-joliet \
+					-ucs-level 3 \
+					-rock \
+					-eltorito-alt-boot \
+					-eltorito-platform efi \
+					-b EFI/BOOT/boot.efi \
+					-hard-disk-boot \
+					-f \
+					-quiet \
+					$ESP
+				isohybrid --uefi $ESP/../thinstation-efi.iso
+				echo $ESP/../thinstation-efi.iso >> boot-images/initrd/added.files
 			;;
 			pxe)
 				ESP=boot-images/pxe
@@ -2393,6 +2482,7 @@ if [ -z "$NOIMAGES" ]; then
 
 				addpkgs $ESP
 				syslinux_copy_files_bios
+				rufus_copy_files
 				add_image
 				add_overlay
 
@@ -2441,18 +2531,26 @@ if [ -z "$NOIMAGES" ]; then
 					sed -i -e "s/LM=4/LM=2/g" $EFIDIR/$file
 				done
 
-				BDIR=/syslinux
+				BDIR=/isolinux
 				CONFIGFILE=isolinux.cfg
 				LOADER=isolinux.bin
 				syslinux_copy_files_bios
+
+				BDIR=/syslinux
+				CONFIGFILE=syslinux.cfg
+				LOADER=syslinux
+				LM=2
+				syslinux_copy_files_bios
+
+				rufus_copy_files
 
 				add_image
 				addpkgs $ESP
 
 				mkisofs	-V "$ts_cdvolname" \
 					-o $ESP/../thinstation-refind.iso \
-					-b boot/syslinux/isolinux.bin \
-					-c boot/syslinux/boot.cat \
+					-b boot/isolinux/isolinux.bin \
+					-c boot/isolinux/boot.cat \
 					-no-emul-boot \
 					-boot-load-size 4 \
 					-boot-info-table \
@@ -2476,7 +2574,7 @@ if [ -z "$NOIMAGES" ]; then
 					ESP=boot-images/systemd-boot
 					EFIOVERLAY="$ESP/EFI $ESP/loader"
 					LM=2
-					configdir=boot-images/templates/systemd-boot/$ts_gummitheme
+					configdir=boot-images/templates/systemd-boot/"$ts_gummitheme"
 					sys_copy /usr/lib/prebootloader/PreLoader.efi $ESP/EFI/BOOT/bootx64.efi
 					sys_copy /usr/lib/prebootloader/HashTool.efi $ESP/EFI/BOOT/HashTool.efi
 					sys_copy /usr/lib/systemd/boot/efi/systemd-bootx64.efi $ESP/EFI/BOOT/loader.efi
@@ -2500,7 +2598,7 @@ if [ -z "$NOIMAGES" ]; then
 
 					LM=4
 
-					configdir=boot-images/templates/systemd-boot/$ts_gummitheme
+					configdir=boot-images/templates/systemd-boot/"$ts_gummitheme"
 					sys_copy /usr/lib/prebootloader/PreLoader.efi $ESP/EFI/BOOT/bootx64.efi
 					sys_copy /usr/lib/prebootloader/HashTool.efi $ESP/EFI/BOOT/HashTool.efi
 					sys_copy /usr/lib/systemd/boot/efi/systemd-bootx64.efi $ESP/EFI/BOOT/loader.efi
@@ -2520,18 +2618,26 @@ if [ -z "$NOIMAGES" ]; then
 						sed -i -e "s/LM=4/LM=2/g" $ESP/$file
 					done
 
-					BDIR=/syslinux
+					BDIR=/isolinux
 					CONFIGFILE=isolinux.cfg
 					LOADER=isolinux.bin
 					syslinux_copy_files_bios
+
+					BDIR=/syslinux
+					CONFIGFILE=syslinux.cfg
+					LOADER=syslinux
+					LM=2
+					syslinux_copy_files_bios
+
+					rufus_copy_files
 
 					add_image
 					addpkgs $ESP
 
 					mkisofs	-V "$ts_cdvolname" \
 						-o $ESP/../thinstation-efi.iso \
-						-b boot/syslinux/isolinux.bin \
-						-c boot/syslinux/boot.cat \
+						-b boot/isolinux/isolinux.bin \
+						-c boot/isolinux/boot.cat \
 						-no-emul-boot \
 						-boot-load-size 4 \
 						-boot-info-table \

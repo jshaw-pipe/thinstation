@@ -3,7 +3,6 @@
 export PACKAGE=xfwm4
 export PORTS="	exo \
 		garcon \
-		upower \
 		xfce4-notifyd \
 		xorg-xinput \
 		xkeyboard-config \
@@ -34,6 +33,8 @@ export DROP_DIRS="	lib/xfce4/backdrops \
 			lib/themes/Default/balou"
 
 export DROP_FILES="	xfce4-about.desktop \
+			google-chrome.desktop \
+			firefox.desktop \
 			exo-file-manager.desktop \
 			exo-mail-reader.desktop \
 			exo-terminal-emulator.desktop \

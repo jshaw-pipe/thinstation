@@ -273,10 +273,10 @@ disk_select()
 
 	for disk in `blockdev --report | sed -r 's/[[:space:]]+/:/g' | cut -d ":" -f7 | grep -e / |grep -v [0-9]`; do
 		disksize=`blockdev --report | sed -r 's/[[:space:]]+/:/g' | grep -e $disk\$ | cut -d ":" -f6`
-		disk[$index]=$disk
+		disks[$index]=$disk
 		if [ "${disksize[$index]}" -gt "30000000000" ] ; then
 			gigs=$(( ${disksize}/1024/1024/1024 ))
-			echo "$index|${disk[$index]}|$gigs" >> $tempdir/disklist
+			echo "$index|${disks[$index]}|$gigs" >> $tempdir/disklist
 			let index+=1
 		fi
 	done
@@ -328,7 +328,7 @@ disk_select()
 		exit 1
 	fi
 
-	disk=${disk[$index]}
+	disk=${disks[$index]}
 }
 
 install_it()
@@ -353,7 +353,9 @@ user_conf()
 	mkdir -p $USERDIR
 	echo "LOCALE=$LOCALE" > $CONF
 	echo "TIME_ZONE=$TIME_ZONE" >> $CONF
-	echo "SCREEN_RESOLUTION=$SCREEN_RESOLUTION" >> $CONF
+	if ! vmware-checkvm >/dev/null 2>&1; then
+		echo "SCREEN_RESOLUTION=$SCREEN_RESOLUTION" >> $CONF
+	fi
     cat <<'EOF'>> $CONF
 AUDIO_LEVEL=90
 #MIC_LEVEL=80
@@ -407,10 +409,15 @@ if is_enabled $INSTALLER_DEV || is_enabled $INSTALLER_MEM_CHECK ; then
 	mem_check
 fi
 
-proxy_check
+if is_enabled $INSTALLER_DEV || is_enabled $INSTALLER_PROXY_CHECK ; then
+	export INSTALLER_PROXY_CHECK
+	proxy_check
+fi
+
 disk_select
 
 if is_enabled $INSTALLER_DEV ; then
+	export INSTALLER_DEV
 	resolution_select
 	timezone_select
 	locale_select
@@ -421,8 +428,11 @@ install_it
 
 if is_enabled $INSTALLER_DEV ; then
 	cat $bootdir/syslinux/syslinux.tpl | sed -e "s/\$RES/$res/g" > $bootdir/syslinux/syslinux.cfg
+	cat $bootdir/syslinux/syslinux.tpl | sed -e "s/\$RES/$res/g" > /boot/EFI/BOOT/syslinux.cfg
+
 else
 	cat $bootdir/syslinux/$INSTALLER_SYSLINUX_FILENAME > $bootdir/syslinux/syslinux.cfg
+	cat $bootdir/syslinux/$INSTALLER_SYSLINUX_FILENAME > /boot/EFI/BOOT/syslinux.cfg
 fi
 
 if is_enabled $INSTALLER_DEV ; then

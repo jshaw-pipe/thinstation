@@ -132,17 +132,26 @@ cd $bootdir/syslinux
 cp /install/* .
 cp /install/bios/* .
 ./extlinux -i /boot/boot/syslinux
+
+cd /boot
+mkdir -p EFI/BOOT
+cp /install/efi64/* /boot/EFI/BOOT/.
+mv /boot/EFI/BOOT/syslinux.efi /boot/EFI/BOOT/bootx64.efi
+cp /install/* /boot/EFI/BOOT/.
+
 cd $bootdir
 
-# Setup proxy for wget and git
-proxy-setup
-. /tmp/.proxy
+if is_enabled $INSTALLER_DEV || is_enabled $INSTALLER_PROXY_CHECK ; then
+	# Setup proxy for wget and git
+	proxy-setup
+	. /tmp/.proxy
+fi
 
 # Install a default boot and backup-boot image into the boot partition
 if [ -e /mnt/cdrom0/$INSTALLER_ARCHIVE_NAME ]; then
 	tar -xvf /mnt/cdrom0/$INSTALLER_ARCHIVE_NAME
 else
-	echo "Downloading a Default Image"
+	echo "Downloading Image"
 	if ! wget -t 3 -T 30 "$INSTALLER_WEB_ADDRESS/$INSTALLER_ARCHIVE_NAME"; then
 		exit 2
 	fi

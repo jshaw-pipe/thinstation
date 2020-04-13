@@ -3,8 +3,9 @@
 . `dirname $0`/common
 . /etc/splash.functions
 
-#set -x
-#exec </dev/null >/var/log/fastboot.log  2>&1
+# Short enough to just always log.....
+set -x
+exec </dev/null >/var/log/fastboot.log  2>&1
 
 search()
 {
@@ -112,13 +113,17 @@ pxelinux()
 			done
 		fi
 		rm -rf /var/log/wget_progress
+	elif ! is_enabled $SLOWMODE; then
+		echo "tftp! Really? Are you a sadist?"
+		echo "Set SLOWMODE=true in .buildtime to actually try this."
+		echo "Otherwise, switch to lpxelinux and a web server."
 	else
-		squash_server=`dirname $boot_file`
-		if [ "$squash_server" == "." -o "$squash_server" == "/." ]; then
-			unset squash_server
-		else
-			squash_server="`basename $squash_server`"/
-		fi
+#		squash_server=`dirname $boot_file`
+#		if [ "$squash_server" == "." -o "$squash_server" == "/." ]; then
+#			unset squash_server
+#		else
+#			squash_server="`basename $squash_server`"/
+#		fi
 		FILE_NET="$squash_server$squash_location"lib.squash
 		tftp -g -l $FILE -r $FILE_NET -b $TFTP_BLOCKSIZE $SERVER_IP 2>&1 |tee /var/log/tftp_progress &
 		sleep .2
@@ -175,7 +180,7 @@ isolinux()
 
 squash_loc()
 {
-	squash_location=`dirname $initrd`
+	squash_location=`dirname $initrd |sed -e 's|::/boot|/boot|g'`
 	if [ "$squash_location" == "." -o "$squash_location" == "/." ]; then
 		unset squash_location
 	elif [ "`echo $squash_location |cut -c 1`" == "/" ]; then

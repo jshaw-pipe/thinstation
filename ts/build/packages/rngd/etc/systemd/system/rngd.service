@@ -7,6 +7,7 @@ After=pkg.service
 Type=forking
 EnvironmentFile=/etc/thinstation.env
 ExecStart=/etc/init.d/rngd init
+PIDFile=/run/rngd.pid
 SyslogIdentifier=thinstation
 
 [Install]
