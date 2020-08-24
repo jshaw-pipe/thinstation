@@ -32,7 +32,6 @@ module ledtrig-audio
 module dell-smm-hwmon
 module crc32-pclmul
 module i2c-algo-bit
-module crc32c-intel
 module mac80211
 module snd-hda-intel
 module drm_kms_helper
@@ -74,14 +73,12 @@ module mmc_core
 module snd-pcm
 module cfg80211
 module lpc_ich
-module drm_panel_orientation_quirks
 module scsi_mod
 module snd-timer
 module mc
 module snd
 module mei-me
 module e1000e
-module intel-gtt
 module cfbfillrect
 module mei
 module cfbimgblt
@@ -90,7 +87,6 @@ module cfbcopyarea
 module wmi
 module parport_pc
 module parport
-module video
 module dell-smo8800
 module dell-rbtn
 module rfkill

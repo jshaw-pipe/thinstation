@@ -35,7 +35,6 @@ module crct10dif-pclmul
 module snd-hda-codec
 module crc32-pclmul
 module mac80211
-module crc32c-intel
 module ahci
 module uvcvideo
 module snd-hda-core
@@ -71,10 +70,8 @@ module serio_raw
 module snd-timer
 module lpc_ich
 module libarc4
-module drm_panel_orientation_quirks
 module snd
 module hid-sensor-hub
-module intel-gtt
 module wacom
 module cfbfillrect
 module mei-me
@@ -93,5 +90,4 @@ module fujitsu-laptop
 module industrialio
 module sparse-keymap
 module fujitsu-tablet
-module video
 module overlay

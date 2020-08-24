@@ -14,7 +14,7 @@ PKGDIR=boot-images/pkg-packages
 DEVDIR=./packages/base/dev
 MODDIR=boot-images/module-packages
 PACDIR=./tmp-tree/packages
-MAXIMAGE=1786432
+MAXIMAGE=17864320
 TOOLSDIR=./utils/tools
 KERNEL_PARAMETERS=""
 CONFDIR=./conf
@@ -122,6 +122,12 @@ remove_files()
 		if [ -e ./build.image ] ; then
 			rm ./build.image
 		fi
+		if [ -e /ts/firmware_found ]; then
+			rm -rf /ts/firmware_found
+		fi
+		if [ -e /ts/firmware_notfound ]; then
+			rm -rf /ts/firmware_notfound
+		fi
 	fi
 }
 
@@ -159,7 +165,6 @@ mounted()
 
 lib_in_path()
 {
-#set -x
 	for lpath in `cat lpaths.tmp` $filepath; do
 		if [ -e ./tmp-tree$lpath/$1 ] || [ -e $pkgname$lpath/$1 ]; then
 			return 0
@@ -171,7 +176,6 @@ lib_in_path()
 			return 0
 		fi
 	fi
-#set +x
 	return 1
 }
 export -f lib_in_path
@@ -366,7 +370,7 @@ module_package_dependencies()
 						;;
 						firmware)
 							if is_enabled $ts_allfirmware; then
-								if [ -z "`find ./tmp-tree/lib/firmware -name ${name}`" ]; then
+								if [ ! -e "./tmp-tree/lib/firmware/$name" ]; then
 									if ! is_enabled $DISPLAYED; then
 										echo "Adding firmware dependencies for $module"
 										DISPLAYED=true
@@ -847,33 +851,22 @@ allfirm()
 	if is_enabled $ts_allfirmware; then
 		local fmodule=`find /lib/modules/$KERNVER -name $1`
 		local module=`basename $fmodule`
-		if [ -e /ts/firmware_notfound/$module.oops ]; then
-			WRITE_CACHE=false
-		fi
-		if [ -e /ts/firmware_cache/$module.turbo ]; then
-			if [ -e /ts/firmware_notfound/$module.oops ]; then
-				echo -e "\tModule $module has missing firmware!"
-				firmlist=`cat /ts/firmware_cache/$module.turbo |grep -v -f /ts/firmware_notfound/$module.oops`
-			else
-				firmlist=`cat /ts/firmware_cache/$module.turbo`
-			fi
-			WRITE_CACHE=false
-		else
-			firmlist=`modinfo -F firmware $fmodule`
-			WRITE_CACHE=true
-			mkdir -p /ts/firmware_cache
-			mkdir -p /ts/firmware_notfound
-			touch /ts/firmware_cache/$module.turbo
-		fi
+		firmlist=`modinfo -F firmware $fmodule`
+
+		mkdir -p /ts/firmware_found
+		mkdir -p /ts/firmware_notfound
+		rm -rf /ts/firmware_cache/$module
+		rm -rf /ts/firmware_notfound/$module
+
 		if [ -n "$firmlist" ]; then
 			echo "Adding extra module firmware for $module"
 			for firmware in $firmlist; do
-				copy_firmware `basename $firmware`
+				copy_firmware $firmware
 				result=$?
-				if [ "$result" == "0" ] && $WRITE_CACHE; then
-					echo "$firmware" >> /ts/firmware_cache/$module.turbo
-				elif [ "$result" == "2" ] && $WRITE_CACHE; then
-					echo "$firmware" >> /ts/firmware_notfound/$module.oops
+				if [ "$result" == "0" ]; then
+					echo "$firmware" >> /ts/firmware_found/$module
+				elif [ "$result" == "2" ]; then
+					echo "$firmware" >> /ts/firmware_notfound/$module
 				fi
 			done
 		fi
@@ -946,23 +939,34 @@ copy_firmware()
 	if [ -n "$2" ]; then
 		firmfiles=`find -L /lib/firmware/ -name $1\* | grep $2`
 	else
-		firmfiles=`find -L /lib/firmware/ -name $1\*`
+		firmfiles=/lib/firmware/$1
 	fi
 	if [ -n "$firmfiles" ]; then
 		for firmfile in $firmfiles; do
-			firmpath=./tmp-tree/lib/firmware/`echo $firmfile |cut -d '/' -f4-`
-			if [ ! -e $firmpath ]; then
-				echo "Firmware: `basename $firmfile`"
-				if [ ! -d ${firmpath%/*} ] ;then
-					mkdir -p ${firmpath%/*}
+			firmpath=./tmp-tree${firmfile}
+			if [ -e $firmfile ]; then
+				if [ -n `readlink $firmfile` ]; then
+					ffile=`readlink -e $firmfile`
 				fi
-				ln $firmfile ${firmpath%/*}/. 2>/dev/null
-				return 0
+				if [ -e $ffile ]; then
+					if [ ! -e $firmpath ]; then
+						echo "Firmware: $firmfile"
+						if [ ! -d `dirname ${firmpath}` ] ;then
+							mkdir -p `dirname ${firmpath}`
+						fi
+						ln $ffile ${firmpath} #|| return 2
+					fi
+				else
+					echo -e "\tNotice, Firmware $1 not found"
+					return 2
+				fi
+			else
+				echo -e "\tNotice, Firmware $1 not found"
+				return 2
 			fi
 		done
 	else
 		echo -e "\tNotice, Firmware $1 not found"
-#		echo "$1" >> /missing
 		return 2
 	fi
 }
@@ -1182,12 +1186,12 @@ if is_enabled $ts_earlymicrocode ; then
 elif is_enabled $ts_allfirmware ; then
 	echo "Doing an All Firmware Build!"
 	if [ -e /lib/firmware/amd-ucode ]; then
-	    for microcode in `find /lib/firmware/amd-ucode -type f -printf '%f '`; do
+	    for microcode in `find /lib/firmware/amd-ucode -type f |cut -d "/" -f4-`; do
 		copy_firmware $microcode
 	    done
 	fi
 	if [ -e /lib/firmware/intel-ucode ]; then
-	    for microcode in `find /lib/firmware/intel-ucode -type f -printf '%f '`; do
+	    for microcode in `find /lib/firmware/intel-ucode -type f |cut -d "/" -f4-`; do
 		copy_firmware $microcode
 	    done
 	fi
@@ -1757,6 +1761,13 @@ filesystem_fixups()
 	echo -e "\tLinking BusyBox\n"
 	chroot ./tmp-tree /bin/busybox --install -s
 
+	if [ -e ./tmp-tree/lib/libcrypto.so.1.1 ]; then
+		cp /usr/lib/.libcrypto.so.1.1.hmac ./tmp-tree/lib
+	fi
+	if [ -e ./tmp-tree/lib/libssl.so.1.1 ]; then
+		cp /usr/lib/.libssl.so.1.1.hmac ./tmp-tree/lib
+	fi
+
 	if [ -e ./tmp-tree/finalize ]; then
 		echo -e "\tRunning Finalize\n"
 		mount --bind /dev ./tmp-tree/dev
@@ -2096,7 +2107,7 @@ add_image()
 			sys_copy $INITDIR/$KERN64 $ESP/boot/$KERN64
 			# Because HashTool.efi is dumb and cant deal with a folder named boot on CD.
 			# Also makes it easier for the user to enroll the kernel hash.
-			sys_copy $INITDIR/$KERN64 $ESP/EFI/BOOT/enroll-$KERN64
+#			sys_copy $INITDIR/$KERN64 $ESP/EFI/BOOT/enroll-$KERN64
 #		else
 #			sys_copy $INITDIR/vmlinuz $ESP/boot/vmlinuz
 #			sys_copy $INITDIR/vmlinuz $ESP/EFI/BOOT/enroll-vmlinuz
@@ -2104,7 +2115,7 @@ add_image()
 	else
 		for kernel in `find $INITDIR -maxdepth 1 -type f -name vmlinuz\* -printf '%f '`; do
 			sys_copy $INITDIR/$kernel $ESP/boot/$kernel
-			sys_copy $INITDIR/$kernel $ESP/EFI/BOOT/enroll-$kernel
+#			sys_copy $INITDIR/$kernel $ESP/EFI/BOOT/enroll-$kernel
 			if [ -e $INITDIR/lib.squash ]; then
 				sys_link hard $INITDIR/lib.squash $ESP/boot/lib.squash
 			fi
@@ -2273,7 +2284,7 @@ syslinux_copy_files_efi()
 
 refind_copy_files()
 {
-	refdir=/boot/efi/EFI/refind
+	refdir=/usr/share/refind
 	configdir=boot-images/templates/refind/"$ts_refindtheme"
 	KDIR=${ESP}/boot
 	EFIDIR=$ESP/EFI/BOOT
@@ -2282,7 +2293,7 @@ refind_copy_files()
 		sys_copy $refdir/$file $EFIDIR/$file
 	done
 
-	sys_copy $refdir/refind_ia32.efi $EFIDIR/bootia32.efi
+#	sys_copy $refdir/refind_ia32.efi $EFIDIR/bootia32.efi
 	sys_copy $refdir/refind_x64.efi $EFIDIR/bootx64.efi
 
 	for file in `find $configdir -type f |sed -e "s|$configdir||g"`; do
@@ -2475,21 +2486,27 @@ if [ -z "$NOIMAGES" ]; then
 			;;
 			iso)
 				ESP=boot-images/iso/source
-				BDIR=/syslinux
-				CONFIGFILE=isolinux.cfg
-				LOADER=isolinux.bin
-				LM=4
+
+                                BDIR=/isolinux
+                                CONFIGFILE=isolinux.cfg
+                                LOADER=isolinux.bin
+                                syslinux_copy_files_bios
+
+                                BDIR=/syslinux
+                                CONFIGFILE=syslinux.cfg
+                                LOADER=syslinux
+                                LM=2
+                                syslinux_copy_files_bios
 
 				addpkgs $ESP
-				syslinux_copy_files_bios
 				rufus_copy_files
 				add_image
 				add_overlay
 
 				mkisofs	-V "$ts_cdvolname" \
 					-o $ESP/../thinstation.iso \
-					-b boot/syslinux/isolinux.bin \
-					-c boot/syslinux/boot.cat \
+					-b boot/isolinux/isolinux.bin \
+					-c boot/isolinux/boot.cat \
 					-no-emul-boot \
 					-boot-load-size 4 \
 					-boot-info-table \
@@ -2521,11 +2538,23 @@ if [ -z "$NOIMAGES" ]; then
 
 				CONFIGFILE=refind.conf
 				refind_copy_files
+#				mv $ESP/EFI/BOOT/bootx64.efi $ESP/EFI/BOOT/loader.efi
+				mv $ESP/EFI/BOOT/bootx64.efi $ESP/EFI/BOOT/grubx64.efi
+				sys_copy /boot/efi/EFI/fedora/shimx64.efi $ESP/EFI/BOOT/bootx64.efi
+				sys_copy /boot/efi/EFI/fedora/MokManager.efi $ESP/EFI/BOOT/MokManager.efi
+				sys_copy /boot/efi/EFI/fedora/mmx64.efi $ESP/EFI/BOOT/mmx64.efi
+#				sys_copy /boot/efi/EFI/ThinStation/shimx64.efi $ESP/EFI/BOOT/bootx64.efi
+#				sys_copy /boot/efi/EFI/ThinStation/shimx64.efi $ESP/EFI/BOOT/grubx64.efi
+#				sys_copy /boot/efi/EFI/ThinStation/mmx64.efi $ESP/EFI/BOOT/mmx64.efi
+#                                sys_copy /ts/certs/'ThinStation Platform Key'.cer $ESP/ThinStation-PK.cer
+#				sys_copy /ts/certs/ThinStation-KEK-CA.cer $ESP/ThinStation-KEK-CA.cer
+				sys_copy /ts/certs/ThinStation-SB-UEFI-CA.cer $ESP/ThinStation-SB-UEFI-CA.cer
+#				sys_copy /ts/certs/ThinStation-SB-UEFI-Signing.cer $ESP/ThinStation-SB-UEFI-Signing.cer
 				add_overlay
 				add_image efi
 				wrap_efi
 
-				# For isohybrid efi, change the LM method, so that as an HD image the correct
+				# For isohybrid efi, change the LM method, so that as an HD image, the correct
 				# continuation method is selected. Only for EFI, BIOS is still ISO
 				for file in `find $configdir -type f |sed -e "s|$configdir||g"`; do
 					sed -i -e "s/LM=4/LM=2/g" $EFIDIR/$file
@@ -2599,10 +2628,21 @@ if [ -z "$NOIMAGES" ]; then
 					LM=4
 
 					configdir=boot-images/templates/systemd-boot/"$ts_gummitheme"
-					sys_copy /usr/lib/prebootloader/PreLoader.efi $ESP/EFI/BOOT/bootx64.efi
-					sys_copy /usr/lib/prebootloader/HashTool.efi $ESP/EFI/BOOT/HashTool.efi
-					sys_copy /usr/lib/systemd/boot/efi/systemd-bootx64.efi $ESP/EFI/BOOT/loader.efi
-					sys_copy /usr/lib/prebootloader/PreLoader.efi $ESP/EFI/Microsoft/Boot/bootmgr.efi
+					sys_copy /boot/efi/EFI/fedora/shimx64.efi $ESP/EFI/BOOT/bootx64.efi
+					sys_copy /boot/efi/EFI/fedora/MokManager.efi $ESP/EFI/BOOT/MokManager.efi
+					sys_copy /boot/efi/EFI/fedora/mmx64.efi $ESP/EFI/BOOT/mmx64.efi
+#					sys_copy /boot/efi/EFI/ThinStation/shimx64.efi $ESP/EFI/BOOT/grubx64.efi
+#					sys_copy /boot/efi/EFI/ThinStation/mmx64.efi $ESP/EFI/BOOT/mmx64.efi
+#	                                sys_copy /ts/certs/'ThinStation Platform Key'.cer $ESP/ThinStation-PK.cer
+#        	                        sys_copy /ts/certs/ThinStation-KEK-CA.cer $ESP/ThinStation-KEK-CA.cer
+                	                sys_copy /ts/certs/ThinStation-SB-UEFI-CA.cer $ESP/ThinStation-SB-UEFI-CA.cer
+#                        	        sys_copy /ts/certs/ThinStation-SB-UEFI-Signing.cer $ESP/ThinStation-SB-UEFI-Signing.cer
+#					echo "loader.efi,ThinStation,,ThinStation default boot entry" > boot.csv
+#					iconv -t UTF-16 < boot.csv > $ESP/EFI/BOOT/BOOT.CSV
+#					iconv -t UTF-16 < boot.csv > $ESP/EFI/BOOT/BOOTX64.CSV
+#					rm boot.csv
+#					sys_copy /usr/lib/systemd/boot/efi/systemd-bootx64.efi $ESP/EFI/BOOT/loader.efi
+					sys_copy /usr/lib/systemd/boot/efi/systemd-bootx64.efi $ESP/EFI/BOOT/grubx64.efi
 					for file in `find $configdir -type f |sed -e "s|$configdir||g"`; do
 						sys_copy ${configdir}${file} $ESP/$file
 						sed -i -e "s|/boot/vmlinuz|/boot/$KERN64|g" $ESP/$file

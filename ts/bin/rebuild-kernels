@@ -11,14 +11,12 @@ kernels()
 		prt-get update -uf $port
 		prt-get update -um $port
 		shrink $port
-		rm /ts/firmware_cache/*
-		rm /ts/firmware_notfound/*
 	done
 }
 
 modules()
 {
-	for port in bbswitch cryptodev-linux macbook12-spi-driver; do
+	for port in bbswitch cryptodev-linux macbook12-spi-driver rtl8821ce; do
         	if prt-get current $port > /dev/null; then
                 	prt-get update -fr -if -im -is $port
 	        else
@@ -31,6 +29,7 @@ modules()
 }
 
 case $1 in
-	modules) modules;;
-	kernels|*) kernels; modules;;
+	-modules|-m) modules;;
+	-kernels|--k|*) kernels;;
+	-all|--a) kernels; modules;;
 esac

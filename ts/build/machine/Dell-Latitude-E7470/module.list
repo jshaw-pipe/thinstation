@@ -47,7 +47,6 @@ module dell-wmi-descriptor
 module snd-hda-core
 module ahci
 module dcdbas
-module crc32c-intel
 module drm_kms_helper
 module dell-smm-hwmon
 module snd-hwdep
@@ -72,12 +71,10 @@ module libata
 module videodev
 module i2c-i801
 module soundcore
-module drm_panel_orientation_quirks
 module intel-xhci-usb-role-switch
 module scsi_mod
 module processor_thermal_device
 module serio_raw
-module intel-gtt
 module rtsx_pci
 module hid-multitouch
 module roles
@@ -93,7 +90,6 @@ module cfbimgblt
 module intel_pch_thermal
 module cfbcopyarea
 module parport
-module video
 module dell-rbtn
 module int3400_thermal
 module int3403_thermal

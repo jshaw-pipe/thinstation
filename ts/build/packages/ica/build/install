@@ -66,7 +66,7 @@ for repack in cups expat sane libgphoto2 v4l-utils libtiff libjpeg-turbo libxkbc
         gdb \
         libpng12 pcsc-lite atkmm cairomm ffmpeg libsigc++ pangomm util-linux at-spi2-atk \
         atk gdk-pixbuf glib glibmm gtk gtkmm libxml2 pango alsa-lib cairo fontconfig freetype libva \
-        nspr nss pulseaudio libglvnd libvdpau xorg-libpixman xorg-libx11 xorg-libxcb \
+        nspr nss pulseaudio libvdpau xorg-libpixman xorg-libx11 xorg-libxcb \
         xorg-libxcomposite xorg-libxcursor xorg-libxdamage xorg-libxext xorg-libxfixes xorg-libxi \
         xorg-libxinerama xorg-libxkbfile xorg-libxrandr xorg-libxrender xorg-libxscrnsaver xorg-libxtst glibc; do
         repackage $repack -t $INSTALLDIR
@@ -92,6 +92,7 @@ fi
 echo "exit 0" > $INSTALLDIR/bin/install_initd
 echo "exit 0" > $INSTALLDIR/bin/update-rc.d
 echo "exit 0" > $INSTALLDIR/bin/chkconfig
+echo "exit 0" > $INSTALLDIR/bin/systemctl
 chmod +x $INSTALLDIR/bin/install_initd
 chmod +x $INSTALLDIR/bin/update-rc.d
 chmod +x $INSTALLDIR/bin/chkconfig

@@ -35,7 +35,6 @@ module irqbypass
 module crct10dif-pclmul
 module crc32-pclmul
 module mac80211
-module crc32c-intel
 module snd-hda-codec
 module ghash-clmulni-intel
 module snd-hda-core
@@ -45,10 +44,8 @@ module snd-hwdep
 module libahci
 module snd-pcm
 module cfg80211
-module pcspkr
 module libata
 module serio_raw
-module intel-gtt
 module snd-timer
 module i2c-algo-bit
 module snd
